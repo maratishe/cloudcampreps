@@ -1,0 +1,19 @@
+{
+	"manifest_version":2,
+	"name":"CloudCampPreps",
+	"description":"Cloud-Shared Prep Sysem for Kyutech Cloud Camp 2014",
+	"version":"1.0",
+	"permissions": ["tabs","storage","<all_urls>"],
+	"browser_action":{
+		"default_icon":"icon.png",
+		"default_title":"CloudCampPreps",
+		"default_popup":"cloudcampreps.float.html"
+	},
+	"background":{ "scripts":["serverless.js","cloudcampreps.background.js"]},
+	"content_security_policy": "script-src 'self' 'unsafe-eval'; object-src 'self'",
+	"content_scripts":[{
+			"matches":["http://*/*"],
+			"js":["serverless.js","cloudcampreps.inpage.js"],
+			"run_at":"document_end"
+	}]
+}
