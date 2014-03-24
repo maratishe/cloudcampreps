@@ -1,4 +1,4 @@
-$.ioutils.nolog = false;
+$.ioutils.nolog = true;
 $.ioutils.nostats = true;
 $.ioutils.callbacktimeout = '20s';
 var $body = $( 'body').css({ 'font-size': $.io.defs.fonts.big})
@@ -49,6 +49,7 @@ var ratedoc = function( code, rate, $ratebox) { $body.myoverclosebox( function( 
 			DRILLS.raw[ code][ AUTH.email] = parseInt( v);
 			$ratebox.empty().append( '<strong>' + ( AS.lang() == 'en' ? 'Rating:' : '緊急性:') + $.mathRound( $.mathAvg( $.hv( DRILLS.raw[ code]))) + '</strong>');
 			STR.add( DRILLS, function() { box.close(); })
+			STR.add({ type: 'vote', email: AUTH.email, vote: { code: DRILLS.raw[ code][ AUTH.email]}}, function() { });
 		})
 		
 	})
