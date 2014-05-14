@@ -989,7 +989,7 @@ return type?vs:vs[0];}
 $.lm=function(first,second){var list=[];for(var i=0;i<first.length;i++)list.push(first[i]);if(!second)return list;for(var i=0;i<second.length;i++)list.push(second[i]);return list;}
 $.lsort=function(L,bigtosmall){L.sort(function(a,b){return bigtosmall?parseFloat(b)-parseFloat(a):parseFloat(a)-parseFloat(b)})}
 $.hlsort=function(hl,k,bigtosmall){var ks=$.hk(hl);var vs=$.hltl(hl,k);for(var i in vs)if($.isString(vs[i]))vs[i]=parseFloat(''+vs[i]);var v2k={};for(var i in vs){var k=ks[i];var v=''+vs[i];if(!v2k[v])v2k[v]=[];v2k[v].push(k);}
-$.lsort(vs,bigtosmall);var hl2=[];for(var i in vs){var v=vs[i];for(var ii in v2k[''+v]){var k=v2k[''+v][ii];hl2.push(hl[k]);}}
+$.lsort(vs,bigtosmall);vs=$.hk($.hvak(vs,true,true));var hl2=[];for(var i in vs){var v=vs[i];for(var ii in v2k[''+v]){var k=v2k[''+v][ii];hl2.push(hl[k]);}}
 return hl2;}
 $.textdim=function(text,css){var $dummy=$('body').ioover($.hm({position:'absolute',right:'-10px',top:'0px',width:'auto',height:'auto'},css)).append(text);var h={height:$dummy.height(),width:$dummy.width()};$dummy.remove();return h;}
 $.strim=function(text){var list=$.s2l(text,' ',null,true);if(!list.length)return'';return $.l2s(list,' ');}
@@ -1537,6 +1537,9 @@ me.add('<strong>'+me.props.msgs.error+'</strong>: '+msg);return true;}
 this.ioatom.msgs=function(msgs){var me=this;if(!msgs||!msgs.length)return true;for(var i in msgs)if(!me.msg(msgs[i]))return false;return true;}
 this.ioatom.errs=function(msgs){var me=this;if(!msgs||!msgs.length)return true;for(var i in msgs)if(!me.err(msgs[i]))return false;return true;}
 list.push(this.ioatom);});if(list.length==1)return list[0];if(list.length>1)return list;return this;}})(jQuery);
+
+
+
 
 
 
@@ -2669,6 +2672,35 @@ main_loop();return out.join('');}});})();
 
 
 
+var bzip2={};bzip2.array=function(bytes){var bit=0,byte=0;var BITMASK=[0,0x01,0x03,0x07,0x0F,0x1F,0x3F,0x7F,0xFF];return function(n){var result=0;while(n>0){var left=8-bit;if(n>=left){result<<=left;result|=(BITMASK[left]&bytes[byte++]);bit=0;n-=left;}else{result<<=n;result|=((bytes[byte]&(BITMASK[n]<<(8-n-bit)))>>(8-n-bit));bit+=n;n=0;}}
+return result}}
+bzip2.simple=function(bits){var size=bzip2.header(bits);var all='',chunk='';do{all+=chunk;chunk=bzip2.decompress(bits,size);}while(chunk!=-1);return all;}
+bzip2.header=function(bits){if(bits(8*3)!=4348520)throw"No magic number found";var i=bits(8)-48;if(i<1||i>9)throw"Not a BZIP archive";return i;};bzip2.decompress=function(bits,size,len){var MAX_HUFCODE_BITS=20;var MAX_SYMBOLS=258;var SYMBOL_RUNA=0;var SYMBOL_RUNB=1;var GROUP_SIZE=50;var bufsize=100000*size;for(var h='',i=0;i<6;i++)h+=bits(8).toString(16);if(h=="177245385090")return-1;if(h!="314159265359")throw"eek not valid bzip data";bits(32);if(bits(1))throw"unsupported obsolete version";var origPtr=bits(24);if(origPtr>bufsize)throw"Initial position larger than buffer size";var t=bits(16);var symToByte=new Uint8Array(256),symTotal=0;for(i=0;i<16;i++){if(t&(1<<(15-i))){var k=bits(16);for(j=0;j<16;j++){if(k&(1<<(15-j))){symToByte[symTotal++]=(16*i)+j;}}}}
+var groupCount=bits(3);if(groupCount<2||groupCount>6)throw"another error";var nSelectors=bits(15);if(nSelectors==0)throw"meh";var mtfSymbol=[];for(var i=0;i<groupCount;i++)mtfSymbol[i]=i;var selectors=new Uint8Array(32768);for(var i=0;i<nSelectors;i++){for(var j=0;bits(1);j++)if(j>=groupCount)throw"whoops another error";var uc=mtfSymbol[j];mtfSymbol.splice(j,1);mtfSymbol.splice(0,0,uc);selectors[i]=uc;}
+var symCount=symTotal+2;var groups=[];for(var j=0;j<groupCount;j++){var length=new Uint8Array(MAX_SYMBOLS),temp=new Uint8Array(MAX_HUFCODE_BITS+1);t=bits(5);for(var i=0;i<symCount;i++){while(true){if(t<1||t>MAX_HUFCODE_BITS)throw"I gave up a while ago on writing error messages";if(!bits(1))break;if(!bits(1))t++;else t--;}
+length[i]=t;}
+var minLen,maxLen;minLen=maxLen=length[0];for(var i=1;i<symCount;i++){if(length[i]>maxLen)maxLen=length[i];else if(length[i]<minLen)minLen=length[i];}
+var hufGroup;hufGroup=groups[j]={};hufGroup.permute=new Uint32Array(MAX_SYMBOLS);hufGroup.limit=new Uint32Array(MAX_HUFCODE_BITS+1);hufGroup.base=new Uint32Array(MAX_HUFCODE_BITS+1);hufGroup.minLen=minLen;hufGroup.maxLen=maxLen;var base=hufGroup.base.subarray(1);var limit=hufGroup.limit.subarray(1);var pp=0;for(var i=minLen;i<=maxLen;i++)
+for(var t=0;t<symCount;t++)
+if(length[t]==i)hufGroup.permute[pp++]=t;for(i=minLen;i<=maxLen;i++)temp[i]=limit[i]=0;for(i=0;i<symCount;i++)temp[length[i]]++;pp=t=0;for(i=minLen;i<maxLen;i++){pp+=temp[i];limit[i]=pp-1;pp<<=1;base[i+1]=pp-(t+=temp[i]);}
+limit[maxLen]=pp+temp[maxLen]-1;base[minLen]=0;}
+var byteCount=new Uint32Array(256);for(var i=0;i<256;i++)mtfSymbol[i]=i;var runPos,count,symCount,selector;runPos=count=symCount=selector=0;var buf=new Uint32Array(bufsize);while(true){if(!(symCount--)){symCount=GROUP_SIZE-1;if(selector>=nSelectors)throw"meow i'm a kitty, that's an error";hufGroup=groups[selectors[selector++]];base=hufGroup.base.subarray(1);limit=hufGroup.limit.subarray(1);}
+i=hufGroup.minLen;j=bits(i);while(true){if(i>hufGroup.maxLen)throw"rawr i'm a dinosaur";if(j<=limit[i])break;i++;j=(j<<1)|bits(1);}
+j-=base[i];if(j<0||j>=MAX_SYMBOLS)throw"moo i'm a cow";var nextSym=hufGroup.permute[j];if(nextSym==SYMBOL_RUNA||nextSym==SYMBOL_RUNB){if(!runPos){runPos=1;t=0;}
+if(nextSym==SYMBOL_RUNA)t+=runPos;else t+=2*runPos;runPos<<=1;continue;}
+if(runPos){runPos=0;if(count+t>=bufsize)throw"Boom.";uc=symToByte[mtfSymbol[0]];byteCount[uc]+=t;while(t--)buf[count++]=uc;}
+if(nextSym>symTotal)break;if(count>=bufsize)throw"I can't think of anything. Error";i=nextSym-1;uc=mtfSymbol[i];mtfSymbol.splice(i,1);mtfSymbol.splice(0,0,uc);uc=symToByte[uc];byteCount[uc]++;buf[count++]=uc;}
+if(origPtr<0||origPtr>=count)throw"I'm a monkey and I'm throwing something at someone, namely you";var j=0;for(var i=0;i<256;i++){k=j+byteCount[i];byteCount[i]=j;j=k;}
+for(var i=0;i<count;i++){uc=buf[i]&0xff;buf[byteCount[uc]]|=(i<<8);byteCount[uc]++;}
+var pos=0,current=0,run=0;if(count){pos=buf[origPtr];current=(pos&0xff);pos>>=8;run=-1;}
+count=count;var output='';var copies,previous,outbyte;if(!len)len=Infinity;while(count){count--;previous=current;pos=buf[pos];current=pos&0xff;pos>>=8;if(run++==3){copies=current;outbyte=previous;current=-1;}else{copies=1;outbyte=current;}
+while(copies--){output+=(String.fromCharCode(outbyte));if(!--len)return output;}
+if(current!=previous)run=0;}
+return output;}
+
+
+
+
 $.cryptCRC24=function(bytes){var L=[0x00000000,0x00d6a776,0x00f64557,0x0020e221,0x00b78115,0x00612663,0x0041c442,0x00976334,0x00340991,0x00e2aee7,0x00c24cc6,0x0014ebb0,0x00838884,0x00552ff2,0x0075cdd3,0x00a36aa5,0x00681322,0x00beb454,0x009e5675,0x0048f103,0x00df9237,0x00093541,0x0029d760,0x00ff7016,0x005c1ab3,0x008abdc5,0x00aa5fe4,0x007cf892,0x00eb9ba6,0x003d3cd0,0x001ddef1,0x00cb7987,0x00d02644,0x00068132,0x00266313,0x00f0c465,0x0067a751,0x00b10027,0x0091e206,0x00474570,0x00e42fd5,0x003288a3,0x00126a82,0x00c4cdf4,0x0053aec0,0x008509b6,0x00a5eb97,0x00734ce1,0x00b83566,0x006e9210,0x004e7031,0x0098d747,0x000fb473,0x00d91305,0x00f9f124,0x002f5652,0x008c3cf7,0x005a9b81,0x007a79a0,0x00acded6,0x003bbde2,0x00ed1a94,0x00cdf8b5,0x001b5fc3,0x00fb4733,0x002de045,0x000d0264,0x00dba512,0x004cc626,0x009a6150,0x00ba8371,0x006c2407,0x00cf4ea2,0x0019e9d4,0x00390bf5,0x00efac83,0x0078cfb7,0x00ae68c1,0x008e8ae0,0x00582d96,0x00935411,0x0045f367,0x00651146,0x00b3b630,0x0024d504,0x00f27272,0x00d29053,0x00043725,0x00a75d80,0x0071faf6,0x005118d7,0x0087bfa1,0x0010dc95,0x00c67be3,0x00e699c2,0x00303eb4,0x002b6177,0x00fdc601,0x00dd2420,0x000b8356,0x009ce062,0x004a4714,0x006aa535,0x00bc0243,0x001f68e6,0x00c9cf90,0x00e92db1,0x003f8ac7,0x00a8e9f3,0x007e4e85,0x005eaca4,0x00880bd2,0x00437255,0x0095d523,0x00b53702,0x00639074,0x00f4f340,0x00225436,0x0002b617,0x00d41161,0x00777bc4,0x00a1dcb2,0x00813e93,0x005799e5,0x00c0fad1,0x00165da7,0x0036bf86,0x00e018f0,0x00ad85dd,0x007b22ab,0x005bc08a,0x008d67fc,0x001a04c8,0x00cca3be,0x00ec419f,0x003ae6e9,0x00998c4c,0x004f2b3a,0x006fc91b,0x00b96e6d,0x002e0d59,0x00f8aa2f,0x00d8480e,0x000eef78,0x00c596ff,0x00133189,0x0033d3a8,0x00e574de,0x007217ea,0x00a4b09c,0x008452bd,0x0052f5cb,0x00f19f6e,0x00273818,0x0007da39,0x00d17d4f,0x00461e7b,0x0090b90d,0x00b05b2c,0x0066fc5a,0x007da399,0x00ab04ef,0x008be6ce,0x005d41b8,0x00ca228c,0x001c85fa,0x003c67db,0x00eac0ad,0x0049aa08,0x009f0d7e,0x00bfef5f,0x00694829,0x00fe2b1d,0x00288c6b,0x00086e4a,0x00dec93c,0x0015b0bb,0x00c317cd,0x00e3f5ec,0x0035529a,0x00a231ae,0x007496d8,0x005474f9,0x0082d38f,0x0021b92a,0x00f71e5c,0x00d7fc7d,0x00015b0b,0x0096383f,0x00409f49,0x00607d68,0x00b6da1e,0x0056c2ee,0x00806598,0x00a087b9,0x007620cf,0x00e143fb,0x0037e48d,0x001706ac,0x00c1a1da,0x0062cb7f,0x00b46c09,0x00948e28,0x0042295e,0x00d54a6a,0x0003ed1c,0x00230f3d,0x00f5a84b,0x003ed1cc,0x00e876ba,0x00c8949b,0x001e33ed,0x008950d9,0x005ff7af,0x007f158e,0x00a9b2f8,0x000ad85d,0x00dc7f2b,0x00fc9d0a,0x002a3a7c,0x00bd5948,0x006bfe3e,0x004b1c1f,0x009dbb69,0x0086e4aa,0x005043dc,0x0070a1fd,0x00a6068b,0x003165bf,0x00e7c2c9,0x00c720e8,0x0011879e,0x00b2ed3b,0x00644a4d,0x0044a86c,0x00920f1a,0x00056c2e,0x00d3cb58,0x00f32979,0x00258e0f,0x00eef788,0x003850fe,0x0018b2df,0x00ce15a9,0x0059769d,0x008fd1eb,0x00af33ca,0x007994bc,0x00dafe19,0x000c596f,0x002cbb4e,0x00fa1c38,0x006d7f0c,0x00bbd87a,0x009b3a5b,0x004d9d2d];var key=L[0];for(var i=0;i<bytes.length;i++)key=$.btail(key>>8,24)^L[$.btail(key^bytes[i],8)];return key;}
 
 
@@ -3076,6 +3108,83 @@ A.process();}
 
 
 
+if(!$.io)$.io={}
+$.fn.nicecoverRingGetterDUMMY=function(url,c){var $me=$(this).eq(0);var a=$me.iomakegui(null,'nicecoverRingGetterDUMMY');a.meta=function(label,c){c({core:{label:'label'},files:{file1:{},file2:{},file3:{}},refs:{label1:{},label2:{}},figures:{filename1:{},filename2:{},filename3:{},filename4:{},filename5:{}}})}
+a.trains=function(){return{};}
+if(c)c(a);return a;}
+$.fn.nicecoverRingGetterSTRINGEX=function(c){var $me=$(this).eq(0);var a=$me.iomakegui(null,'nicecoverRingGetterSTRINGEX');var meta,trains;a.set=function(h){meta=h.ring;trains=h.trains;}
+a.meta=function(label,c){c(meta)}
+a.trains=function(){return trains;}
+if(c)c(a);return a;}
+$.fn.nicecoverRing=function(label,getter,c,clickc,overc){var $me=$(this).eq(0);var meta;var A=$me.iomakegui(null,'nicecoverRing');A.trains=function(){var trains=getter.trains();var $show=null;var $trains;var tags2={};for(var k in trains)tags2[k]=trains[k];var tags={};if(meta.tags)for(var i in meta.tags)tags[meta.tags[i]]=true;var mytrains={};for(var k in tags)if(tags2[k])mytrains[k]=true;var commit=function(){}
+var show=function(){$.log('mytrains/trains/tags2',mytrains,trains,tags2);var showinfo=function(info){var $box=$show.clone().empty().css({left:'0px',width:Math.round($show.position().left-25)+'px',height:'auto',color:'#fff'});$me.append($box);$box.ioover(true).append(info).css({color:'#fff',padding:'3px','text-align':'right'});$box.iounder().iodrawRoundbox($.io.style.canvas.info);$box.oneTime('5s',function(){$box.ioanimoutremove('slow');})}
+var one=function(train,info){var $box=$show.ioover(true).css({width:'auto',height:'auto'})
+var onoff=$box.ioover(true).css({width:'auto',height:'auto'}).autosizebutton('<strong>'+train+'</strong>',{'font-size':$.io.font.bigger,color:'#fff'},$.io.style.canvas.info,'onoff').onon(function(){mytrains[train]=true;$trains.find('span').ioanimoutemptyin('fast',function(){$trains.find('span').append($.hk(mytrains).length+'/'+$.hk(trains).length);})}).onoff(function(){delete mytrains[train];$trains.find('span').ioanimoutemptyin('fast',function(){$trains.find('span').append($.hk(mytrains).length+'/'+$.hk(trains).length);})}).onchange(function(){showinfo(info)}).onmouseover(function(){$box.stopTime().oneTime('500ms',function(){showinfo(info)})})
+$box.ioover({position:'absolute',top:'0px',right:'101%',width:Math.round($box.height())+'px',height:Math.round($box.height())+'px'}).iconbutton('close',$.io.style.canvas.alert).onclick(function(){$box.ioanimoutremove('slow')})
+$box.ioover({position:'absolute',top:'0px',left:'101%',width:Math.round($box.height())+'px',height:Math.round($box.height())+'px'}).iconbutton('fastforward',$.io.style.canvas.link).onclick(function(){})
+if(mytrains[train])onoff.on(true);}
+$show=$me.ioover().css({left:Math.round($trains.position().left)+'px',top:Math.round($trains.position().top+$trains.height()+3)+'px',width:'auto',height:Math.round($me.height()-$trains.position().top-$trains.height())+'px'})
+for(var train in mytrains)one(train,tags2[k]);for(var train in tags2)if(!mytrains[train])one(train,tags2[train]);}
+$trains=$me.ioover().css({width:'auto',height:'auto','font-size':$.io.font.larger})
+$trains.autosizebutton('<strong>trains(<span>'+$.hk(mytrains).length+'/'+$.hk(trains).length+'</span>)</strong>',{'font-size':$.io.font.large,color:'#fff',margin:'2px 3px'},$.io.style.canvas.alert).onclick(function(){if($show&&$show.isindom())return $show.ioanimoutremove('fast',commit);else show();})
+$trains.iocenterv();$trains.iocenterh();if(c)c(A);}
+A.ring=function(){$me.ioanimoutemptyin('fast',function(){getter.meta(label,function(h){meta=h;var b=30;var d=10;var a=3;$.log('h',h);var c1=$.hk(h).length;var c2=0;for(var k in h)c2+=$.hk(h[k]).length;x=Math.round(360 /(c2+c1*a));y=Math.round(a*x);$.log('y/x',y,x);var W=$me.width();var H=$me.height();var R=W>H?0.5*H:0.5*W;var C=$me.svgcanvas();C.style({fill:'#fff',fillOpacity:0.2,stroke:'#fff',strokeOpacity:0.8,strokeWidth:d})
+C.circle([W / 2,H / 2],R-b)
+var angle=180-y;var event=function(k1,k2,c){$me.stopTime().oneTime('500ms',function(){c(k1,k2);})}
+var button=function(k1,k2,dom){var state=false;var B=$(dom).ioatomsPlainButton({donotwrap:true,donotdraw:true,on:1.0,hover:0.7,off:0.4})
+B.onmouseover(function(){B.outer().fadeTo('fast',0.7);if(overc)event(k1,k2,overc);})
+B.onmouseout(function(){B.outer().fadeTo('fast',state?1.0:0.3)})
+B.onclick(function(){if(state)state=false;else state=true;B.outer().fadeTo('fast',state?1.0:0.3);if(clickc)event(k1,k2,clickc);})}
+var one=function(k,c){angle=Math.round(angle+y);var color='#000';if(k=='core')color='#f00';C.style({fill:color,fillOpacity:0.7,stroke:color,strokeOpacity:0.8,strokeWidth:d+3});var h2=$.mathRotate(R-2*b,angle-15);var h3=$.mathRotate(R-2*b,angle+15+x*$.hk(h[k]).length-x);button(k,'all',C.line([W / 2+h2.x,H / 2+h2.y],[W / 2+h3.x,H / 2+h3.y]));C.style({fill:color,fillOpacity:0.7,strokeWidth:0});$.log('ring key/angle',k,angle);for(var k2 in h[k]){var h2=$.mathRotate(R-b,angle);$.log('key('+k+') angle/coords',angle,h2);var dom=C.circle([W / 2+h2.x,H / 2+h2.y],k=='core'?b-5:b-10);button(k,k2,dom);angle=Math.round(angle+x);}
+c();}
+$.log('hash keys',$.hk(h));$me.ioloop($.hk(h),'1ms',function(dom,value,sleep,c2){if(!value.length){A.trains();c2();return;}
+var k=value.shift();one(k,function(){c2(value)});})})})}
+A.ring();}
+$.fn.nicecoverTrainGetterDUMMY=function(c){var $me=$(this).eq(0);var a=$me.iomakegui(null,'nicecoverTrainGetterDUMMY');var info;a.info=function(){return{trains:{'1st Line':'1st description','2nd Line':'2nd description','3rd Line':'3rd description'},info:[{label:'one',role:'core',tags:['one','two','three','2nd Line']},{label:'two',role:'figures',tags:['one','two','three','2nd Line']},{label:'four',role:'refs',tags:['one','two','three','1st Line','2nd Line','3rd Line']},{label:'five',role:'figures',tags:['one','two','three']},{label:'six',role:'files',tags:['two','three','1st Line']},{label:'seven',role:'core',tags:['one']}]}}
+if(c)c(a);return a;}
+$.fn.nicecoverTrainGetterSTRINGEX=function(c){var $me=$(this).eq(0);var a=$me.iomakegui(null,'nicecoverRingGetterSTRINGEX');var info;a.set=function(h){info=h;}
+a.info=function(){return info;}
+if(c)c(a);return a;}
+$.io.nicecoverTrain={vspace:150}
+$.fn.nicecoverTrain=function(train,getter,donec){var $me=$(this).eq(0);var W=$me.width();var info=getter.info();$me.css({overflow:'hidden'})
+$me.ioground('#fff',0.8);var $floor=$me.ioover().css({height:15000,width:'100%'})
+var $header=$me.ioover().css({height:'1.3em','font-size':$.io.font.larger,'border-bottom':'1px solid #666'}).ioground('#fff',0.9);var A=$me.iomakegui(null,'nicecoverRing');A.logon();A.setup=$.hm($.io.nicecoverTrain);A.movingfloor=$floor.movingfloor();A.mockvframe=$floor.mockvframe();A.last={name:null,train:null,station:null,by:null}
+A.trains={};A.order='as.is';A.mode='do.nothing';A.info=null;A.stations2box={};A.process=function(){for(var i in info.info){var h=info.info[i];if(!h.tags)continue;for(var ii in h.tags){var tag=h.tags[ii];if(tag==train)continue;if(info.trains[tag])A.trains[tag]=info.trains[tag];}}
+A.info={'do.nothing':{},'by.train':{},'by.role':{},'by.label':{},'by.tag':{}}
+for(var mode in A.info){if(mode=='do.nothing'){A.info[mode]=info.info;for(var i in A.info[mode])A.info[mode][i]=[A.info[mode][i]];continue;}
+var info2=$.hm(info.info);if(mode=='by.role')A.log('process() : info',info);for(var i in info2){var h2=info2[i];if($.isArray(h2))h2=h2[0];h2.pos=i;var k=null;if(mode=='by.train')k='tags';if(mode=='by.role')k='role';if(mode=='by.label')k='label';if(mode=='by.tag')k='tags';var ks=h2[k]?h2[k]:'*';if(!$.isArray(ks))ks=[ks];if(mode=='by.role')A.log('process() : mode/pos/ks/h2',mode,i,ks,h2);for(var iii in ks){var k2=ks[iii];if(mode=='by.train'&&!A.trains[k2])continue;if(!A.info[mode][k2])A.info[mode][k2]=[];A.info[mode][k2].push($.hm(h2));}}
+if(mode=='by.role')A.log('process() : final info',A.info[mode]);}
+A.header();}
+A.selectorone=function($add,v,c,last){$add.ioover(false).autosizebutton('<strong>'+v+'</strong>',{'font-size':$.io.font.big},$.io.style.canvas.link).onclick(function(){if(c)c(v);})}
+A.selector=function($add,L,c,last){$add.empty().ioloop($.hk(L),'1ms',function(dom,value,sleep,c2){if(!value.length)return c2();var k=value.shift();A.selectorone($add,L[k],c,last);c2(value);})}
+A.header=function(){var $nameadd;var $name=$header.ioover().css({height:'auto',width:'auto'})
+$name.ioover(false).autosizebutton('<strong>'+train+'</strong>',{'font-size':$.io.font.larger},$.io.style.canvas.alert,'onoff').onon(function(){$nameadd.ioanimoutemptyin('fast')}).onoff(function(){A.selector($nameadd,$.hk(A.info),function(v){A.mode=v;A.body(true);})}).on(true);$nameadd=$name.ioover({position:'absolute',top:'101%',left:'0px',width:'auto',height:'auto'});$name.iocenterh();var $linesadd;var $lines=$name.ioover({position:'absolute',right:'105%',top:'0px'})
+$lines.ioover(false).autosizebutton('<strong>lines(<span>??</span>)</strong>',{'font-size':$.io.font.big},$.io.style.canvas.info,'onoff').onon(function(){$linesadd.ioanimoutemptyin('fast')}).onoff(function(){A.selector($linesadd,$.hk(A.trains),function(v){})}).on(true);$linesadd=$lines.ioover({position:'absolute',top:'101%',left:'0px',width:'auto',height:'auto'});$lines.find('span').empty().append($.hk(A.trains).length);var $stationsadd;var $stations=$name.ioover({position:'absolute',left:'105%',top:'0px'})
+$stations.ioover(false).autosizebutton('<strong>stations(<span>??</span>)</strong>',{'font-size':$.io.font.big},$.io.style.canvas.info,'onoff').onon(function(){$stationsadd.ioanimoutemptyin('fast')}).onoff(function(){A.selector($stationsadd,$.hk(A.info[A.mode]),function(v){A.movingfloor.find(A.stations2box[v],function(){A.movingfloor.moveby(0,50);});},A.last.name)}).on(true);$stationsadd=$stations.ioover({position:'absolute',top:'101%',left:'0px',width:'auto',height:'auto'});$stations.find('span').empty().append($.hk(A.info[A.mode]).length);A.body();}
+A.body=function(reload){$floor.ioanimoutemptyin('fast',function(){$floor.css({top:'0px',left:'0px'})
+var $stem=$floor.ioover().css({width:'10px'}).ioground('#000',0.4).iocenterh();var y=0;A.log('body : (mode='+A.mode+')',A.info[A.mode]);var one=function($box,k,L){A.log('L.length='+L.length);A.stations2box[k]=$box;var $under;var trains={};$box.ioground('#fff',0.5);var C=$box.svgcanvas();var W=$box.width();var H=$box.height();C.style({fill:'#fff',fillOpacity:0.2,stroke:'#fff',strokeOpacity:0.8,strokeWidth:0})
+var $right=$box.ioover({position:'absolute',top:'0px',right:'3px',width:'45%','font-size':$.io.font.small,'text-align':'right',color:'#555'})
+var $left=$box.ioover({position:'absolute',top:'0px',left:'3px',width:'45%','font-size':$.io.font.small,'text-align':'left',color:'#555'})
+var $station=$box.ioover().css({width:'auto',height:'auto'})
+var selectorone=function($box,v,c){$box.ioover(false).autosizebutton('<strong>'+v+'</strong>',{'font-size':$.io.font.big},$.io.style.canvas.link).onclick(function(){if(c)c(v);})}
+var selector=function($box,L,c){$box.empty().ioloop($.hk(L),'1ms',function(dom,value,sleep,c2){if(!value.length)return c2();var k=value.shift();selectorone($box,L[k],c);c2(value);})}
+var $trainbox=null;var $stationbox=null;var dotrain=function($box){if($trainbox&&$trainbox.isindom())return $trainbox.ioanimoutremove('fast');if(!$.hk(trains).length)return;$trainbox=$box.ioover({position:'absolute',right:'102%',top:'0px',width:'auto',height:'auto'})
+selector($trainbox,$.hk(trains),function(v){})}
+var dostation=function($box){if($stationbox&&$stationbox.isindom())return $stationbox.ioanimoutremove('fast');var info={};for(var i in L){var h2=L[i];var id=[];if(h2.role)id.push(h2.role);if(h2.type)id.push(h2.type);if(h2.label)id.push(h2.label);id=$.ltt(id,'--');info[id]=h2;}
+$stationbox=$box.ioover({position:'absolute',left:'102%',top:'0px',width:'auto',height:'auto'})
+selector($stationbox,$.hk(info),function(v){})}
+var station=$station.ioover(false).autosizebutton('<span>(??)</span><strong>'+k+'</strong><span>(??)</span>',{'font-size':$.io.font.larger,color:'#fff'},$.io.style.canvas.alert,'onoff').onon(function(){$under.ioanimoutemptyin('fast')}).onoff(function(){selector($under,$.ttl('trains,stations'),function(v){if(v=='trains')dotrain($under.children().first());else dostation($under.children().last());},false)}).on(true)
+for(var i in L){var h=L[i];if(!h.tags)continue;for(var ii in h.tags){var tag=h.tags[ii];if(A.trains[tag])trains[tag]=A.trains[tag];}}
+$left.empty().append(trains?$.ltt($.hk(trains),' '):'');var left={};for(var i in L){var h=L[i];var ks='role,label,tags';if(A.mode=='by.role')ks='label,tags';if(A.mode=='by.label')ks='role,tags';if(A.mode=='by.train'||A.mode=='by.tag')ks='role,label';ks=$.ttl(ks);for(var i in ks){var k2=ks[i];if(!h[k2])continue;if(!$.isArray(h[k2]))left[h[k2]]=true;else for(var ii in h[k2])left[h[k2][ii]]=true;}}
+$right.empty().append(left&&$.hk(left)?$.ltt($.hk(left),' '):'');station.inner().find('span').first().empty().append('('+$.hk(trains).length+')').css({'font-size':$.io.font.big})
+station.inner().find('span').last().empty().append('('+L.length+')').css({'font-size':$.io.font.big})
+$station.iocenterv();$station.iocenterh();$under=$station.ioover({position:'absolute',top:'101%',left:'0px'}).ioground('#fff',0.9).ioover(false);}
+$stem.ioloop($.hk(A.info[A.mode]),'1ms',function(dom,value,sleep,c){if(!value.length){c();if(!reload&&donec)donec();return;}
+var k=value.shift();var h=A.info[A.mode][k];y+=A.setup.vspace;var $box=$floor.ioover().css({top:y+'px',width:'100%',height:'1.3em','font-size':$.io.font.larger});A.log('body : ioloop : $box/k/h',$box,k,h);one($box,k,h);A.movingfloor.jumpfind($box);A.movingfloor.shiftby(0,50);c(value);})})}
+A.process();}
+
+
+
 
 $.fn.eventqueue=function(mingap,amap,donec,kvstorage,verbose){var $me=$(this).eq(0);var a=$me.iomakegui(null,'eventqueue');a.logon();a.first=$.iotime();a.kvstorage=kvstorage;a.amap=amap;a.q={}
 a.vs2a=function(f,one){return[f,one]}
@@ -3195,7 +3304,7 @@ $.io.stringex.keys=$.hvak($.ttl('type,email,code,creator'),true,true);
 
 
 
-$.ioutils.nolog=false;$.ioutils.nostats=true;$.ioutils.callbacktimeout='20s';var AS,STR,AUTH,DRILLS,DOCS,KS;AUTH=null;DRILLS=null;DOCS={};var $body,$header,$main,$footer,$drillcount,$user;var loadoc=function($box,code){$box.empty().append('loading...');STR.find({code:code},function(docs){if(!docs.length)return;DOCS[code]=$.s642sutf8(docs[0][AS.lang()]);$box.ioanimoutemptyin('fast',function(){$box.append(DOCS[code]);})})}
+$.ioutils.nolog=true;$.ioutils.nostats=true;$.ioutils.callbacktimeout='20s';var AS,STR,AUTH,DRILLS,DOCS,KS;AUTH=null;DRILLS=null;DOCS={};var $body,$header,$main,$footer,$drillcount,$user,$msg;var loadoc=function($box,code){$box.empty().append('loading...');STR.find({code:code},function(docs){if(!docs.length)return;DOCS[code]=$.s642sutf8(docs[0][AS.lang()]);$box.ioanimoutemptyin('fast',function(){$box.append(DOCS[code]);})})}
 var showdoc=function($box,$box2,o,code){var $show=$box.ioground('#2AF',o).ioover(true).append(code).css({overflow:'hidden','font-size':AS.font('big'),margin:'1px 1%',width:'98%',color:'#000','font-weight':'bold'})
 $box.ioatomsPlainButton({donotwrap:true,donotdraw:true}).onclick(function(){$box2.toggle();if(KS[code]&&!DOCS[code])loadoc($box2,code);})
 if(!KS[code])return;var rate=$.mathRound($.mathAvg($.hv(DRILLS.raw[code])),1);var $rate=$box.ioover({position:'absolute',right:'5px',top:'2px',width:'auto',height:'auto'}).append('<strong>'+(AS.lang()=='en'?'Rating:':'緊急性:')+rate+'</strong>')
@@ -3207,8 +3316,7 @@ var $box2=$box.ioover(true).append(AS.lang()=='en'?'Your new vote: ':'投票（�
 var $status=null;var L=[];for(var i=1;i<10;i++)L.push('<strong>'+i+'</strong>');$box2.append($.ltt(L,' - ')).find('strong').iotextbutton(function(v){$status.empty().append(v);},'#4AF');$box.ioover(true).css({height:'3px'})
 $box.ioover(true).append('<strong>*</strong> '+(AS.lang()=='en'?'<strong>1</strong>: least urgent/important, <strong>9</strong>: most urgent/important':'<strong>1</strong>: 重要・緊急性の最も低い, <strong>9</strong>: 重要・緊急性の最も高い'));var $error=$box.ioover(true).css({'font-size':AS.font('normal'),color:'#f00'})
 $box.ioover(true).css({height:'3px'})
-var $button=$box.ioover(true);$button.iofblist(AS.lang()=='en'?'submit':'投票する',AS.font('huge'),null,$.io.style.canvas.alert,function(){var v=$.trim($status.text());if(!v)return $error.empty().append(AS.lang()=='en'?'ERROR! Select a number.':'エラー：番号を選択してください.');$button.ioanimoutemptyin('fast',function(){$button.append('saving...');DRILLS.raw[code][AUTH.email]=parseInt(v);$ratebox.empty().append('<strong>'+(AS.lang()=='en'?'Rating:':'緊急性:')+$.mathRound($.mathAvg($.hv(DRILLS.raw[code])))+'</strong>');STR.add(DRILLS,function(){box.close();})
-var stuff={type:'vote',email:AUTH.email,vote:{code:DRILLS.raw[code][AUTH.email]}};STR.add(stuff,function(){});STR.cloud.write($.h2jsonutf8({who:AUTH.email,where:'rating',when:$.iotime(),what:{code:DRILLS.raw[code][AUTH.email]}},true),'log.'+$.ttl(AUTH.email,'@').shift()+'.'+$.iotime(),function(){});})})
+var $button=$box.ioover(true);$button.iofblist(AS.lang()=='en'?'submit':'投票する',AS.font('huge'),null,$.io.style.canvas.alert,function(){var v=$.trim($status.text());if(!v)return $error.empty().append(AS.lang()=='en'?'ERROR! Select a number.':'エラー：番号を選択してください.');$button.ioanimoutemptyin('fast',function(){$button.append('saving...').css({'font-size':AS.font('big'),color:'#f00'});DRILLS.raw[code][AUTH.email]=parseInt(v);$ratebox.empty().append('<strong>'+(AS.lang()=='en'?'Rating:':'緊急性:')+$.mathRound($.mathAvg($.hv(DRILLS.raw[code])))+'</strong>');$msg.empty().append('syncing...');STR.add(DRILLS,function(){var stuff={type:'vote',email:AUTH.email,vote:{code:code,rate:DRILLS.raw[code][AUTH.email]}};STR.add(stuff,function(){$msg.ioanimoutemptyin('fast');box.close();},true);STR.cloud.write($.h2jsonutf8({who:AUTH.email,where:'rating',when:$.iotime(),what:{code:DRILLS.raw[code][AUTH.email]}},true),'log.'+$.ttl(AUTH.email,'@').shift()+'.'+$.iotime(),function(){});},true)})})
 $status=$button.ioover(true).css({clear:'both','font-size':AS.font('normal'),color:'#f00','font-weight':'bold'})
 $box.find('strong').css({color:'#4AF'})},false,'#fff',0.95)}
 var A=[];A[0]=function(){$main.ioanimoutemptyin('fast',function(){if(!AUTH||!DRILLS)return $main.append(AS.lang()=='en'?'No data and/or auth.':'データ・認証情報がありません。');var h={};$main.ioover(true).css({height:'5px'});var $box=$main.ioover(true).css({position:'relative',height:'500px','border-bottom':'3px solid #888'})
@@ -3233,10 +3341,10 @@ $main.ioover(true).css({height:'20px'});var one=function(h){}
 frame.inner().ioloop(HL,'1ms',function(dom,value,sleep,c){if(!value.length)return c();var h=value.shift();frame.inner().iounder(true).css({height:'3px'})
 var $box2=frame.inner().iounder(true);var $box3=frame.inner().iounder(true);showdoc($box3,$box2,0.3,h.code);c(value);})
 STR.cloud.write($.h2jsonutf8({who:AUTH.email,where:'ratelist',when:$.iotime()},true),'log.'+$.ttl(AUTH.email,'@').shift()+'.'+$.iotime(),function(){});})}
-A[3]=function(){$main.ioanimoutemptyin('fast',function(){if(!AUTH||!DRILLS)return $main.append(AS.lang()=='en'?'No data and/or auth.':'データ・認証情報がありません。');var HL=[];for(var code in DRILLS.raw)HL.push({code:code,rate:$.mathRound($.mathAvg($.hv(DRILLS.raw[code])),1)});HL=$.hlsort(HL,'rate');$main.ioover(true).css({height:'5px'});var $box=$main.ioover(true).css({position:'relative',height:'400px','border-bottom':'3px solid #888'})
+A[3]=function(){$main.ioanimoutemptyin('fast',function(){if(!AUTH||!DRILLS)return $main.append(AS.lang()=='en'?'No data and/or auth.':'データ・認証情報がありません。');var HL=[];for(var code in DRILLS.raw)HL.push({code:code,rate:$.mathRound($.mathAvg($.hv(DRILLS.raw[code])),1)});$.log('HL.length (before)',HL.length);HL=$.hlsort(HL,'rate');$.log('HL.length (after)',HL.length);$main.ioover(true).css({height:'5px'});var $box=$main.ioover(true).css({position:'relative',height:'400px','border-bottom':'3px solid #888'})
 var frame=$box.ioover().mockvframe();$box.ioover({position:'absolute',bottom:'-2px',left:'48%',width:'auto',height:'auto',color:'#666','font-size':AS.font('huge')}).append('+').ioatomsPlainButton({donotdraw:true,donotwrap:true}).onclick(function(){$box.css({height:Math.round($box.height()+50)+'px'});})
 $main.ioover(true).css({height:'20px'});var one=function(h){}
-frame.inner().ioloop(HL,'1ms',function(dom,value,sleep,c){if(!value.length)return c();var h=value.shift();frame.inner().iounder(true).css({height:'3px'})
+$footer.ioloop(HL,'1ms',function(dom,value,sleep,c){if(!value.length)return c();var h=value.shift();frame.inner().iounder(true).css({height:'3px'})
 var $box2=frame.inner().iounder(true);var $box3=frame.inner().iounder(true);showdoc($box3,$box2,0.3,h.code);c(value);})
 STR.cloud.write($.h2jsonutf8({who:AUTH.email,where:'ratelist',when:$.iotime()},true),'log.'+$.ttl(AUTH.email,'@').shift()+'.'+$.iotime(),function(){});})}
 A[4]=function(){$main.ioanimoutemptyin('fast',function(){$.log('A[3]() DRILLS',$.h2json(DRILLS));if(!AUTH)return $main.append(AS.lang()=='en'?'No auth.':'認証情報がありません。');$main.ioover(true).css({height:'10px'})
@@ -3249,12 +3357,13 @@ var en=$main.ioover(true).css({height:'8em','font-size':AS.font('normal')}).guiT
 $main.ioover(true).append('<span>*</span> '+(AS.lang()=='en'?'description in <strong>japanese</strong>':'概要（<strong>日本語</strong>）')).css({'font-size':AS.font('normal'),color:'#555'})
 var $jp=$main.ioover(true).css({'font-size':AS.font('small'),color:'#f00'})
 var jp=$main.ioover(true).css({height:'8em','font-size':AS.font('normal')}).guiTextBox('code',function(){},'... 文章ココ','#4AF,0.25',{'font-size':AS.font('normal')},true);$main.ioover(true).css({height:'5px'})
-$main.ioover(true).iofblist(AS.lang()=='en'?'send':'送信',AS.font('big'),null,$.io.style.canvas.alert,function(){var h={code:$.trim(code.value()),en:$.trim(en.value()),jp:$.trim(jp.value()),creator:AUTH.email};var ks=null;if(DRILLS)ks=$.hvak($.hk(DRILLS.raw),true,true);$.log('ks/DRILLS',$.h2json(ks),$.h2json(DRILLS));if(!h.code||$.ttl(h.code,'.').length<2)return $code.empty().append(AS.lang()=='en'?'bad code':'コードが誤っている');if(DRILLS&&ks&&ks[h.code])return $code.empty().append(AS.lang()=='en'?'this code already exists':'このコードが既に存在している');if(!h.en.length)return $en.empty().append(AS.lang()=='en'?'this field cannot be empty':'空欄禁止です。');if(!h.jp.length)return $jp.empty().append(AS.lang()=='en'?'this field cannot be empty':'空欄禁止です。');$main.ioanimoutemptyin('fast',function(){if(!DRILLS)DRILLS={type:'drillsummary',raw:{}};if(!DRILLS.raw[h.code])DRILLS.raw[h.code]={};KS=$.hvak($.hk(DRILLS.raw),true,true);$drillcount.empty().append(''+$.hk(DRILLS.raw).length);STR.add(DRILLS,function(docid){},true);var stuff={type:'drill',code:h.code,en:$.s2s64utf8(h.en),jp:$.s2s64utf8(h.jp),creator:AUTH.email};STR.add(stuff,function(docid){},true);STR.cloud.write($.h2jsonutf8({who:AUTH.email,where:'add',when:$.iotime(),code:h.code,en:$.s2s64utf8(h.en),jp:$.s2s64utf8(h.jp)},true),'log.'+$.ttl(AUTH.email,'@').shift()+'.'+$.iotime(),function(){});})})
+$main.ioover(true).iofblist(AS.lang()=='en'?'send':'送信',AS.font('big'),null,$.io.style.canvas.alert,function(){var h={code:$.trim(code.value()),en:$.trim(en.value()),jp:$.trim(jp.value()),creator:AUTH.email};var ks=null;if(DRILLS)ks=$.hvak($.hk(DRILLS.raw),true,true);$.log('ks/DRILLS',$.h2json(ks),$.h2json(DRILLS));if(!h.code||$.ttl(h.code,'.').length<2)return $code.empty().append(AS.lang()=='en'?'bad code':'コードが誤っている');if(DRILLS&&ks&&ks[h.code])return $code.empty().append(AS.lang()=='en'?'this code already exists':'このコードが既に存在している');if(!h.en.length)return $en.empty().append(AS.lang()=='en'?'this field cannot be empty':'空欄禁止です。');if(!h.jp.length)return $jp.empty().append(AS.lang()=='en'?'this field cannot be empty':'空欄禁止です。');$main.ioanimoutemptyin('fast',function(){if(!DRILLS)DRILLS={type:'drillsummary',raw:{}};if(!DRILLS.raw[h.code])DRILLS.raw[h.code]={};KS=$.hvak($.hk(DRILLS.raw),true,true);$drillcount.empty().append(''+$.hk(DRILLS.raw).length);$msg.empty().append('syncing...');STR.add(DRILLS,function(docid){var stuff={type:'drill',code:h.code,en:$.s2s64utf8(h.en),jp:$.s2s64utf8(h.jp),creator:AUTH.email};STR.add(stuff,function(docid){$msg.ioanimoutemptyin('fast');},true);STR.cloud.write($.h2jsonutf8({who:AUTH.email,where:'add',when:$.iotime(),code:h.code,en:$.s2s64utf8(h.en),jp:$.s2s64utf8(h.jp)},true),'log.'+$.ttl(AUTH.email,'@').shift()+'.'+$.iotime(),function(){});},true);})})
 $main.ioover(true).css({height:'10px',clear:'both'})
 $main.find('span').css({'font-weight':'bold',color:'#f00','font-size':AS.font('big')});})}
 function header(){$header.ioanimoutemptyin('fast',function(){$header.css({'border-bottom':'2px solid #4AF'});var $box=$header.ioover(true);var $text=$box.ioover(true).attr('id','text').css({height:'auto',width:'75%'}).css({color:'#444','text-align':'right'})
 $text.ioover(true).append('Cloud Camp Preps').css({'font-size':AS.font('huge')});$text.ioover(true).append('Phase 1/3 (<a target="_blank" href="https://rawgithub.com/maratishe/cloudcampreps/master/guide.pdf">'+(AS.lang()=='en'?'topics':'課題募集中')+'</a> till <strong>June 10</strong>)').css({'font-size':AS.font('normal')}).find('a').css({'font-weight':'bold',color:'#f00'})
-$user=$text.ioover(true).append('User: <strong>loading...</strong>').css({'font-size':AS.font('normal')}).find('strong');$drillcount=$text.ioover(true).append(AS.lang()=='en'?'Found <strong>?</strong> topics (drills).':'現在<strong>?</strong>課題（ドリル）が登録されている。').find('strong').css({'font-size':AS.font('big'),color:'#4AF'})
+$user=$text.ioover(true).append('User: <strong>loading...</strong>').css({'font-size':AS.font('normal')}).find('strong');$msg=$text.ioover(true).ioground('#f00','0.8').ioover(true).css({'font-size':AS.font('big'),color:'#FD2'})
+$drillcount=$text.ioover(true).append(AS.lang()=='en'?'Found <strong>?</strong> topics (drills).':'現在<strong>?</strong>課題（ドリル）が登録されている。').find('strong').css({'font-size':AS.font('big'),color:'#4AF'})
 $text.ioover(true).css({height:'5px'})
 var L=$.ttl(AS.lang()=='en'?'tree,search,not.voted.yet,rating,add':'階層,検索,投票まだの方,緊急性順,課題追加');var A2P=$.hvak(L);var L2=[];for(var i in L)L2.push('<strong>'+L[i]+'</strong>');$text.ioover(true).css({'font-size':AS.font('normal')}).append($.ltt(L2,' ')).find('strong').iotextbutton(function(k){eval(A[A2P[k]])();},'#f00');$text.ioover(true).css({height:'5px'})
 $text.ioover().css({left:'102%',top:'0px',height:'100%',width:'auto'}).ioover({position:'relative',display:'block',width:'auto',height:'100%'},'img',{src:'https://rawgithub.com/maratishe/cloudcampreps/master/icon.png'})})}
